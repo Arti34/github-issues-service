@@ -1,0 +1,152 @@
+openapi: 3.1.0
+info:
+  title: GitHub Issues Gateway
+  version: 1.0.0
+  description: Clean HTTP wrapper around GitHub Issues API.
+servers:
+  - url: http://localhost:8000
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service healthy
+  /issues:
+    post:
+      summary: Create an issue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueCreate'
+            example:
+              title: Bug in login
+              body: Login button fails
+              labels: [bug]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Issue'
+        '400': {description: Invalid request}
+        '401': {description: GitHub authentication failed}
+    get:
+      summary: List issues
+      parameters:
+        - {name: state, in: query, schema: {type: string, enum: [open, closed, all], default: open}}
+        - {name: labels, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 30}}
+      responses:
+        '200': {description: Issue list}
+  /issues/{number}:
+    get:
+      summary: Get an issue
+      parameters:
+        - {name: number, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Issue}
+        '404': {description: Not found}
+    patch:
+      summary: Update or close an issue
+      parameters:
+        - {name: number, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueUpdate'}
+      responses:
+        '200': {description: Updated}
+        '400': {description: Invalid request}
+        '404': {description: Not found}
+  /issues/{number}/comments:
+    post:
+      summary: Add a comment
+      parameters:
+        - {name: number, in: path, required: true, schema: {type: integer}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CommentCreate'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Comment'}
+  /webhook:
+    post:
+      summary: Receive GitHub webhook
+      parameters:
+        - {name: X-GitHub-Event, in: header, required: true, schema: {type: string}}
+        - {name: X-GitHub-Delivery, in: header, required: true, schema: {type: string}}
+        - {name: X-Hub-Signature-256, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        '204': {description: Accepted}
+        '400': {description: Unknown or invalid event}
+        '401': {description: Invalid signature}
+  /events:
+    get:
+      summary: List stored webhook deliveries
+      responses:
+        '200':
+          description: Stored events
+components:
+  schemas:
+    IssueCreate:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string, minLength: 1}
+        body: {type: string}
+        labels:
+          type: array
+          items: {type: string}
+    IssueUpdate:
+      type: object
+      properties:
+        title: {type: string}
+        body: {type: string}
+        state: {type: string, enum: [open, closed]}
+    CommentCreate:
+      type: object
+      required: [body]
+      properties:
+        body: {type: string, minLength: 1}
+    Issue:
+      type: object
+      properties:
+        number: {type: integer}
+        html_url: {type: string, format: uri}
+        state: {type: string}
+        title: {type: string}
+        body: {type: [string, 'null']}
+        labels:
+          type: array
+          items: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Comment:
+      type: object
+      properties:
+        id: {type: integer}
+        body: {type: string}
+        user: {type: object}
+        created_at: {type: string, format: date-time}
+        html_url: {type: string, format: uri}
+    Error:
+      type: object
+      properties:
+        error: {type: string}
+        detail: {type: string}
